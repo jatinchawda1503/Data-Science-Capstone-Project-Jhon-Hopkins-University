@@ -1,0 +1,216 @@
+---
+title: "Capstone Project Milestone Report"
+author: "Jatin Chawda"
+date: "3/23/2020"
+output: html_document
+---
+
+# Introduction
+The goal of the Data Science Capstone Project is to use the skills acquired in the specialization in creating an application based on a predictive model for text.
+
+Given a word or phrase as input, the application will try to predict the next word. The predictive model will be trained using a corpus, a collection of written texts, called the HC Corpora which has been filtered by language.
+
+We will create a predictive text model using a large text corpus as training data, in order to be able to predict subsequent words given some text. This will eventually be built as a Shiny application.
+
+
+Review criteria:
+
+  1. Does the link lead to an HTML page describing the exploratory analysis of the training data set?
+  2. Has the data scientist done basic summaries of the three files? Word counts, line counts and basic data tables?
+  3. Has the data scientist made basic plots, such as histograms to illustrate features of the data?
+  4. Was the report written in a brief, concise style, in a way that a non-data scientist manager could appreciate?
+  
+  
+## Preparing the environment
+
+## Downloading the Data
+
+The dataset is downloadable in zipped file via [here](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip).
+
+```{r download,echo=TRUE}
+if (!file.exists("Coursera-SwiftKey.zip")) {
+   download.file("https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip","Coursera-SwiftKey.zip")
+   unzip("Coursera-SwiftKey.zip")
+}
+download.file("http://www.cs.cmu.edu/~biglou/resources/bad-words.txt","bad-words.txt")
+getwd()
+```
+
+## Loading the required libraries
+
+```{r libraries,warning=FALSE,message=FALSE,echo=TRUE}
+library(stringi)
+library(tm)
+library(SnowballC)
+library(RWeka)
+library(ggplot2)
+library(wordcloud)
+```
+
+## Loading the data 
+
+
+```{r loading,cache=TRUE,echo=TRUE}
+twitter.url <- "final/en_US/en_US.twitter.txt"
+blog.url <- "final/en_US/en_US.blogs.txt"
+news.url <- "final/en_US/en_US.news.txt"
+twitter <- readLines(twitter.url, skipNul = TRUE, encoding = "UTF-8")
+blog <- readLines(blog.url, skipNul = TRUE, encoding = "UTF-8")
+news.file <- file(news.url,"rb")
+news <- readLines(news.file, skipNul = TRUE, encoding = "UTF-8")
+close(news.file)
+```
+
+##Basic Summary of Data
+
+
+
+```{r summary,echo=TRUE,cache=TRUE}
+create_summary_table <- function(twitter,blog,news){
+  stats <- data.frame(source = c("twitter","blog","news"),
+            arraySizeMB = c(object.size(twitter)/1024^2,object.size(blog)/1024^2,object.size(news)/1024^2),
+            fileSizeMB = c(file.info(twitter.url)$size/1024^2,file.info(blog.url)$size/1024^2,file.info(news.url)$size/1024^2),
+            lineCount = c(length(twitter),length(blog),length(news)),
+            wordCount = c(sum(stri_count_words(twitter)),sum(stri_count_words(blog)),sum(stri_count_words(news))),
+            charCount = c(stri_stats_general(twitter)[3],stri_stats_general(blog)[3],stri_stats_general(news)[3])
+  )
+  print(stats)
+}
+create_summary_table(twitter,blog,news)
+```
+
+## Sampling the data
+
+In order to enable faster data processing, a data sample from all three sources was generated, therefore there are 10,000 rows of each dataset sampled and combined into a single dataset.
+
+```{r sampling,cache=TRUE,echo=TRUE}
+set.seed(12345)
+sampleData <- c(sample(twitter,10000),
+                sample(blog,10000),
+                sample(news,10000))
+```
+
+## Cleaning the Data
+
+Cleaning the data includes:
+
+1. Cleaning all non ASCII characters
+2. Transforming all data to lower case
+3. Deleting all English stopwords and any stray letters left my the non-ASCII removal
+4. Removing Punctuation
+5. Removing Numbers
+6. Removing Profanities
+7. Removing all stray letters left by the last two calls
+8. Striping all extra whitespace
+
+```{r cleaning,cache=TRUE,echo=TRUE}
+corpus <- VCorpus(VectorSource(sampleData))
+toSpace <- content_transformer(function(x, pattern) {return (gsub(pattern," ",x))})
+# Cleaning all non ASCII characters
+corpus <- tm_map(corpus,toSpace,"[^[:graph:]]")
+
+# Transforming all data to lower case
+corpus <- tm_map(corpus,content_transformer(tolower))
+
+# Deleting all English stopwords and any stray letters left my the non-ASCII removal
+corpus <- tm_map(corpus,removeWords,c(stopwords("english"),letters))
+
+
+# Removing Punctuation
+corpus <- tm_map(corpus,removePunctuation)
+
+# Removing Numbers
+corpus <- tm_map(corpus,removeNumbers)
+
+# Removing Profanities
+profanities = readLines('bad-words.txt')
+
+corpus <- tm_map(corpus, removeWords, profanities)
+
+# Removing all stray letters left by the last two calls
+corpus <- tm_map(corpus,removeWords,letters)
+
+# Striping all extra whitespace
+corpus <- tm_map(corpus,stripWhitespace)
+```
+
+## Exploratory Data Analysis
+
+To begin exploring features of the data, statistics for each data source are  created for n=1,2,3 and then the most frequent terms are found.
+Word counts are estimated by trying to isolate individual words using two different methods of tagging whitespace in the data.
+
+## Tokenize sample into Unigrams, Bigrams and Trigrams
+
+We use Tokenization to break sentences and phrases in to pairs of words or n-grams. Essentially we are breaking down units of words or tokens, hence the term tokenization.
+
+We will use RWeka package for tokenization
+
+```{r ngrams,cache=TRUE}
+#Creating a unigram DTM
+unigramTokenizer <- function(x) {NGramTokenizer(x, Weka_control(min = 1, max = 1))}
+unigrams <- DocumentTermMatrix(corpus, control = list(tokenize = unigramTokenizer))
+#Creating a bigram DTM
+BigramTokenizer <- function(x) {NGramTokenizer(x, Weka_control(min = 2, max = 2))}
+bigrams <- DocumentTermMatrix(corpus, control = list(tokenize = BigramTokenizer))
+#Creating a trigram DTM
+TrigramTokenizer <- function(x) {NGramTokenizer(x, Weka_control(min = 3, max = 3))}
+trigrams <- DocumentTermMatrix(corpus, control = list(tokenize = TrigramTokenizer))
+```
+
+```{r freqs}
+freqTerms <- findFreqTerms(unigrams,lowfreq = 1000)
+unigrams_frequency <- sort(colSums(as.matrix(unigrams[,freqTerms])),decreasing = TRUE)
+unigrams_freq_df <- data.frame(word = names(unigrams_frequency), frequency = unigrams_frequency)
+
+
+freqTerms <- findFreqTerms(bigrams,lowfreq = 50)
+bigrams_frequency <- sort(colSums(as.matrix(bigrams[,freqTerms])),decreasing = TRUE)
+bigrams_freq_df <- data.frame(word = names(bigrams_frequency), frequency = bigrams_frequency)
+
+freqTerms <- findFreqTerms(trigrams,lowfreq = 10)
+trigrams_frequency <- sort(colSums(as.matrix(trigrams[,freqTerms])),decreasing = TRUE)
+trigrams_freq_df <- data.frame(word = names(trigrams_frequency), frequency = trigrams_frequency)
+
+```
+
+## Data Plotting
+
+Below the the graphs for the most common ngrams can be seen.
+
+## Unigrams
+```{r,echo=TRUE}
+g <- ggplot(unigrams_freq_df,aes(x=reorder(word,-frequency),y=frequency))+
+     geom_bar(stat="identity",aes(fill=frequency)) + 
+     xlab("Unigram") + 
+     ylab("Frequency") +
+     labs(title="Unigrams") +                                                        theme(axis.text.x=element_text(angle=55, hjust=1))
+g
+```
+
+## Bigrams
+```{r,echo=TRUE}
+g <- ggplot(bigrams_freq_df,aes(x=reorder(word,-frequency),y=frequency))+
+     geom_bar(stat="identity",aes(fill=frequency)) + 
+     xlab("Bigram") + 
+     ylab("Frequency") +
+     labs(title="Bigrams") +                                                         theme(axis.text.x=element_text(angle=55, hjust=1))
+g
+```
+
+## Trigrams
+
+```{r,echo=TRUE}
+g <- ggplot(trigrams_freq_df,aes(x=reorder(word,-frequency),y=frequency))+
+     geom_bar(stat="identity",aes(fill=frequency)) + 
+     xlab("Trigram") +               
+     ylab("Frequency") +
+     labs(title="Trigrams") + 
+     theme(axis.text.x=element_text(angle=55, hjust=1))
+g
+```
+
+## Plans for the prediction algorithm and Shiny app
+
+Concluding the exploratory analysis of the data, the next steps of this project are to finalize the predictive algorithm, deploy the model as a Shiny application and also create a deck to be able to present the final result.
+
+
