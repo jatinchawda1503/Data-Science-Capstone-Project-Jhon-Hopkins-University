@@ -31,9 +31,6 @@ About the App
 
 ![Word Prediction App](Screenshot.png) 
 
-How It Works
-========================================================
-
 - Next Word Predict is a Shiny application that utilizes a book forecast calculation to foresee the following word(s) in light of content entered by a client. 
 
 - The application will propose the following word in a sentence utilizing a n-gram calculation. A n-gram is a coterminous grouping of *n* words from a given arrangement of content. 
@@ -45,16 +42,11 @@ How It Works
 
 - Different strategies were investigated to improve speed and precision utilizing characteristic language handling and content mining strategies.
 
-How It Works
-========================================================
-
 - The predictive text model was built from a sample of 800,000 lines extracted from the large corpus of blogs,news and twitter data.
 
 - The sample data was then tokenized and cleaned using the **tm** package and a number of regular expressions using the **gsub** function. As part of the cleaning process the data was converted to
 lowercase, removed all non-ascii characters, URLs,email addresses, Twitter handles, hash tags, ordinal numbers,profane words, punctuation and whitespace. The data was then split into tokens (n-grams).
 
-How It Works
-========================================================
 
 - Summary of Clean-up steps:
 
